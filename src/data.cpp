@@ -31,7 +31,6 @@
 #include "lib/framework/frameresource.h"
 #include "lib/framework/strres.h"
 #include "lib/framework/crc.h"
-#include "lib/gamelib/parser.h"
 #include "lib/ivis_opengl/bitimage.h"
 #include "lib/ivis_opengl/png_util.h"
 #include "lib/sound/audio.h"
@@ -147,7 +146,7 @@ static bool bufferSBODYLoad(const char *fileName, void **ppData)
 	WzConfig ini(fileName, WzConfig::ReadOnlyAndRequired);
 	calcDataHash(ini, DATA_SBODY);
 
-	if (!loadBodyStats(ini) || !allocComponentList(COMP_BODY, numBodyStats))
+	if (!loadBodyStats(ini) || !allocComponentList(COMP_BODY, asBodyStats.size()))
 	{
 		return false;
 	}
@@ -170,7 +169,7 @@ static bool bufferSWEAPONLoad(const char *fileName, void **ppData)
 	calcDataHash(ini, DATA_SWEAPON);
 
 	if (!loadWeaponStats(ini)
-	    || !allocComponentList(COMP_WEAPON, numWeaponStats))
+	    || !allocComponentList(COMP_WEAPON, asWeaponStats.size()))
 	{
 		return false;
 	}
@@ -187,7 +186,7 @@ static bool bufferSCONSTRLoad(const char *fileName, void **ppData)
 	calcDataHash(ini, DATA_SCONSTR);
 
 	if (!loadConstructStats(ini)
-	    || !allocComponentList(COMP_CONSTRUCT, numConstructStats))
+	    || !allocComponentList(COMP_CONSTRUCT, asConstructStats.size()))
 	{
 		return false;
 	}
@@ -204,7 +203,7 @@ static bool bufferSECMLoad(const char *fileName, void **ppData)
 	calcDataHash(ini, DATA_SECM);
 
 	if (!loadECMStats(ini)
-	    || !allocComponentList(COMP_ECM, numECMStats))
+	    || !allocComponentList(COMP_ECM, asECMStats.size()))
 	{
 		return false;
 	}
@@ -220,7 +219,7 @@ static bool bufferSPROPLoad(const char *fileName, void **ppData)
 	WzConfig ini(fileName, WzConfig::ReadOnlyAndRequired);
 	calcDataHash(ini, DATA_SPROP);
 
-	if (!loadPropulsionStats(ini) || !allocComponentList(COMP_PROPULSION, numPropulsionStats))
+	if (!loadPropulsionStats(ini) || !allocComponentList(COMP_PROPULSION, asPropulsionStats.size()))
 	{
 		return false;
 	}
@@ -236,7 +235,7 @@ static bool bufferSSENSORLoad(const char *fileName, void **ppData)
 	calcDataHash(ini, DATA_SSENSOR);
 
 	if (!loadSensorStats(ini)
-	    || !allocComponentList(COMP_SENSOR, numSensorStats))
+	    || !allocComponentList(COMP_SENSOR, asSensorStats.size()))
 	{
 		return false;
 	}
@@ -252,7 +251,7 @@ static bool bufferSREPAIRLoad(const char *fileName, void **ppData)
 	WzConfig ini(fileName, WzConfig::ReadOnlyAndRequired);
 	calcDataHash(ini, DATA_SREPAIR);
 
-	if (!loadRepairStats(ini) || !allocComponentList(COMP_REPAIRUNIT, numRepairStats))
+	if (!loadRepairStats(ini) || !allocComponentList(COMP_REPAIRUNIT, asRepairStats.size()))
 	{
 		return false;
 	}
@@ -268,7 +267,7 @@ static bool bufferSBRAINLoad(const char *fileName, void **ppData)
 	WzConfig ini(fileName, WzConfig::ReadOnlyAndRequired);
 	calcDataHash(ini, DATA_SBRAIN);
 
-	if (!loadBrainStats(ini) || !allocComponentList(COMP_BRAIN, numBrainStats))
+	if (!loadBrainStats(ini) || !allocComponentList(COMP_BRAIN, asBrainStats.size()))
 	{
 		return false;
 	}
@@ -502,7 +501,7 @@ static void dataSMSGRelease(void *pData)
  */
 static bool dataImageLoad(const char *fileName, void **ppData)
 {
-	iV_Image *psSprite = (iV_Image *)malloc(sizeof(iV_Image));
+	iV_Image *psSprite = new iV_Image();
 	if (!psSprite)
 	{
 		return false;
@@ -511,7 +510,7 @@ static bool dataImageLoad(const char *fileName, void **ppData)
 	if (!iV_loadImage_PNG(fileName, psSprite))
 	{
 		debug(LOG_ERROR, "IMGPAGE load failed");
-		free(psSprite);
+		delete psSprite;
 		return false;
 	}
 
@@ -561,7 +560,7 @@ static void dataImageRelease(void *pData)
 
 	if (psSprite)
 	{
-		free(psSprite);
+		delete psSprite;
 	}
 }
 
@@ -569,7 +568,7 @@ static void dataImageRelease(void *pData)
 /* Load an audio file */
 static bool dataAudioLoad(const char *fileName, void **ppData)
 {
-	if (audio_Disabled() == true)
+	if (audio_Disabled())
 	{
 		*ppData = nullptr;
 		// No error occurred (sound is just disabled), so we return true
@@ -585,28 +584,21 @@ static bool dataAudioLoad(const char *fileName, void **ppData)
 /* Load an audio file */
 static bool dataAudioCfgLoad(const char *fileName, void **ppData)
 {
-	bool success;
-	PHYSFS_file *fileHandle;
-
-	*ppData = nullptr;
-
+	std::string strName = fileName;
+	ASSERT_OR_RETURN(false, strName.find(".json") != std::string::npos, "Audio effect file must be JSON format!");
 	if (audio_Disabled())
 	{
 		return true;
 	}
-	debug(LOG_WZ, "Reading...[directory: %s] %s", WZ_PHYSFS_getRealDir_String(fileName).c_str(), fileName);
-	fileHandle = PHYSFS_openRead(fileName);
 
-	if (fileHandle == nullptr)
+	WzConfig ini(fileName, WzConfig::ReadOnlyAndRequired);
+	if (!loadAudioEffectFileData(ini))
 	{
 		return false;
 	}
 
-	success = ParseResourceFile(fileHandle);
-
-	PHYSFS_close(fileHandle);
-
-	return success;
+	*ppData = (void *)1;
+	return true;
 }
 
 /* Load a string resource file */

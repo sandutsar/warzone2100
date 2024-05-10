@@ -1,6 +1,6 @@
 /*
 	This file is part of Warzone 2100.
-	Copyright (C) 2020  Warzone 2100 Project
+	Copyright (C) 2020-2022  Warzone 2100 Project
 
 	Warzone 2100 is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -40,13 +40,18 @@
 #include <discord_rpc.h>
 #include <sodium.h>
 #include <EmbeddedJSONSignature.h>
-#include <optional-lite/optional.hpp>
+#include <nonstd/optional.hpp>
 using nonstd::optional;
 using nonstd::nullopt;
 
-static const char* APPID = "505520727521361941";
+#include <wz-discord-config.h>
+#if !defined(WZ_DISCORD_RPC_APPID)
+# define WZ_DISCORD_RPC_APPID ""
+#endif
+
 static const size_t MAX_DISCORD_STR_LEN = 127; // 128 - 1 (for null terminator)
 
+static bool discordRPCEnabled = false;
 static bool presenceUpdatesEnabled = true;
 static std::unordered_map<std::string, std::chrono::system_clock::time_point> lastDismissedJoinRequestByUserId;
 #define WZ_DISCORD_JOIN_SPAM_INTERVAL_SECS 60
@@ -91,7 +96,7 @@ static void asyncGetDiscordDefaultUserAvatar(const std::string& discord_user_dis
 		std::vector<unsigned char> memoryBuffer((unsigned char *)data->memory, ((unsigned char*)data->memory) + data->size);
 		callback(memoryBuffer);
 	};
-	urlRequest.onFailure = [callback](const std::string& url, URLRequestFailureType type, optional<HTTPResponseDetails> transferDetails) {
+	urlRequest.onFailure = [callback](const std::string& url, URLRequestFailureType type, std::shared_ptr<HTTPResponseDetails> transferDetails) {
 		callback(nullopt);
 	};
 	urlRequest.maxDownloadSizeLimit = 4 * 1024 * 1024; // response should never be > 4 MB
@@ -144,7 +149,7 @@ static void asyncGetDiscordUserAvatar(const DiscordUser* request, const std::fun
 		std::vector<unsigned char> memoryBuffer((unsigned char *)data->memory, ((unsigned char*)data->memory) + data->size);
 		callback(memoryBuffer);
 	};
-	urlRequest.onFailure = [callback, discord_user_discriminator](const std::string& url, URLRequestFailureType type, optional<HTTPResponseDetails> transferDetails) {
+	urlRequest.onFailure = [callback, discord_user_discriminator](const std::string& url, URLRequestFailureType type, std::shared_ptr<HTTPResponseDetails> transferDetails) {
 		// fallback
 		asyncGetDiscordDefaultUserAvatar(discord_user_discriminator, callback);
 	};
@@ -648,6 +653,11 @@ public:
 		updateDiscordPresence();
 	}
 
+	virtual void gameExiting() override
+	{
+		Discord_ClearPresence();
+	}
+
 public:
 
 	void processQueuedPresenceUpdate();
@@ -1089,8 +1099,13 @@ static void handleDiscordJoinRequest(const DiscordUser* request)
 
 // MARK: - Initializing sub-system
 
-static void discordInit()
+static bool discordInit()
 {
+	if (strlen(WZ_DISCORD_RPC_APPID) == 0)
+	{
+		debug(LOG_WZ, "Insufficient configuration to enable Discord RPC");
+		return false;
+	}
 	DiscordEventHandlers handlers;
 	memset(&handlers, 0, sizeof(handlers));
 	handlers.ready = handleDiscordReady;
@@ -1099,17 +1114,23 @@ static void discordInit()
 	handlers.joinGame = handleDiscordJoin;
 	handlers.spectateGame = handleDiscordSpectate;
 	handlers.joinRequest = handleDiscordJoinRequest;
-	Discord_Initialize(APPID, &handlers, 1, nullptr);
+	Discord_Initialize(WZ_DISCORD_RPC_APPID, &handlers, 1, nullptr);
+	return true;
 }
 
 void discordRPCInitialize()
 {
-	discordInit();
+	if (!discordInit())
+	{
+		discordRPCEnabled = false;
+		return;
+	}
 	if (!discordSink)
 	{
 		discordSink = std::make_shared<DiscordRPCActivitySink>();
 		ActivityManager::instance().addActivitySink(discordSink);
 	}
+	discordRPCEnabled = true;
 }
 
 static uint32_t framesSinceLastProcessedCallbacks = 0;
@@ -1119,6 +1140,11 @@ static uint32_t remainingInitialFastChecks = 20;
 
 void discordRPCPerFrame()
 {
+	if (!discordRPCEnabled)
+	{
+		return;
+	}
+
 	if (discordSink)
 	{
 		discordSink->processQueuedPresenceUpdate();
@@ -1164,6 +1190,11 @@ void discordRPCPerFrame()
 
 void discordRPCShutdown()
 {
+	if (!discordRPCEnabled)
+	{
+		return;
+	}
+	discordRPCEnabled = false;
 	if (discordSink)
 	{
 		ActivityManager::instance().removeActivitySink(discordSink);

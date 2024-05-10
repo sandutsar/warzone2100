@@ -1,17 +1,42 @@
 {
 	"name": "warzone2100",
 	"version-string": "master-branch",
+	"builtin-baseline": "9de2e978bdfec6bb7852cc1d6ecf375c923c485c",
 	"dependencies": [
-		"sdl2",
 		"physfs",
-		"harfbuzz",
+		"sdl2",
+		{
+			"name": "harfbuzz",
+			"platform": "!emscripten"
+		},
+		{
+			"name": "fribidi",
+			"platform": "!emscripten"
+		},
+		{
+			"name": "freetype",
+			"platform": "!emscripten"
+		},
 		"libogg",
 		"libtheora",
 		"libvorbis",
-		"libpng",
-		"freetype",
-		"gettext",
-		"openal-soft",
+		"opus",
+		{
+			"name": "libpng",
+			"platform": "!emscripten"
+		},
+		{
+			"name": "libspng",
+			"platform": "emscripten"
+		},
+		{
+			"name": "gettext",
+			"platform": "!emscripten"
+		},
+		{
+			"name": "openal-soft",
+			"platform": "!emscripten"
+		},
 		"zlib",
 		"sqlite3",
 		"libsodium",
@@ -39,11 +64,15 @@
 			"features": [
 				"ssl"
 			],
-			"platform": "!windows & !mingw & !osx"
+			"platform": "!windows & !mingw & !osx & !emscripten"
 		},
 		{
 			"name": "angle",
 			"platform": "windows | mingw"
+		},
+		{
+			"name": "basisu",
+			"host": true
 		}
 	],
 	"default-features": [
@@ -58,7 +87,8 @@
 					"default-features": true,
 					"features": [
 						"vulkan"
-					]
+					],
+					"platform": "!emscripten"
 				}
 			]
 		}

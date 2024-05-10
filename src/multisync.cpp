@@ -41,7 +41,7 @@
 
 #include <array>
 
-#include <optional-lite/optional.hpp>
+#include <nonstd/optional.hpp>
 using nonstd::optional;
 using nonstd::nullopt;
 
@@ -78,7 +78,7 @@ bool sendScoreCheck()
 			if (myResponsibility(i))
 			{
 				// Send score to everyone else
-				setMultiStats(i, getMultiStats(i), false);
+				sendMultiStatsScoreUpdates(i);
 			}
 		}
 	}
@@ -313,7 +313,7 @@ bool recvPing(NETQUEUE queue)
 		const auto& senderIdentity = getMultiStats(sender).identity;
 		if (!senderIdentity.empty())
 		{
-			verifiedResponse = getMultiStats(sender).identity.verify(challengeResponse, expectedPingChallenge.value().data(), PING_CHALLENGE_BYTES);
+			verifiedResponse = senderIdentity.verify(challengeResponse, expectedPingChallenge.value().data(), PING_CHALLENGE_BYTES);
 		}
 		if (!verifiedResponse)
 		{
@@ -333,7 +333,7 @@ bool recvPing(NETQUEUE queue)
 			// Output to stdinterface, if enabled
 			std::string senderPublicKeyB64 = base64Encode(senderIdentity.toBytes(EcKey::Public));
 			std::string senderIdentityHash = senderIdentity.publicHashString();
-			wz_command_interface_output("WZEVENT: player identity VERIFIED: %" PRIu32 " %s %s\n", sender, senderPublicKeyB64.c_str(), senderIdentityHash.c_str());
+			wz_command_interface_output("WZEVENT: player identity VERIFIED: %" PRIu32 " %s %s %s\n", sender, senderPublicKeyB64.c_str(), senderIdentityHash.c_str(), NetPlay.players[sender].IPtextAddress);
 		}
 
 		// Note that we have received it

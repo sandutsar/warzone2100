@@ -8,10 +8,12 @@ ${LangFileString} WZ_64BIT_AVAILABLE "Há uma versão de 64-bit de Warzone 2100 
 
 ${LangFileString} WZ_64BIT_INSTALL_32BIT_AVAILABLE "Essa é a versão 64-bit do Warzone 2100.$\r$\nPor favor, baixe a versão 32-bit em https://wz2100.net/ $\r$\nClique em OK para sair da instalação."
 
+${LangFileString} WZ_ARM64_INSTALL_NON_ARM64 "Esta é a versão ARM64 do Warzone 2100, e este dispositivo não tem um processador ARM64.$\r$\nPor favor visite https://wz2100.net/pt/ para baixar a versão apropriada para o seu sistema (exemplo: x64).$\r$\nProsseguir com a instalação ARM64 mesmo assim?"
+
 ${LangFileString} WZ_GPL_NEXT "Próximo"
 
 ${LangFileString} TEXT_SecBase "Arquivos Base"
-${LangFileString} DESC_SecBase "Os arquivos-base necessários para executar o Warzone 2100."
+${LangFileString} DESC_SecBase "Os arquivos base necessários para executar o Warzone 2100."
 
 ${LangFileString} TEXT_SecFMVs "Vídeos"
 ${LangFileString} DESC_SecFMVs "Baixar e instalar as vídeos da campanha do jogo."

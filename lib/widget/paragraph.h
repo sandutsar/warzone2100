@@ -54,7 +54,7 @@ struct ParagraphTextStyle
 class WzCachedText
 {
 public:
-	WzCachedText(std::string text, iV_fonts font, uint32_t cacheDurationMs = 100):
+	WzCachedText(WzString text, iV_fonts font, uint32_t cacheDurationMs = 100):
 		text(text),
 		font(font),
 		cacheDurationMs(cacheDurationMs)
@@ -72,7 +72,7 @@ public:
 	{
 		if (!cachedText)
 		{
-			cachedText = std::unique_ptr<WzText>(new WzText(text, font));
+			cachedText = std::make_unique<WzText>(text, font);
 		}
 
 		cacheExpireAt = realTime + (cacheDurationMs * GAME_TICKS_PER_SEC) / 1000;
@@ -80,7 +80,7 @@ public:
 	}
 
 private:
-	std::string text;
+	WzString text;
 	iV_fonts font;
 	uint32_t cacheDurationMs;
 	std::unique_ptr<WzText> cachedText = nullptr;
@@ -142,6 +142,10 @@ public:
 	void released(W_CONTEXT *, WIDGET_KEY key) override;
 	void highlightLost() override;
 
+	nonstd::optional<std::vector<uint32_t>> getScrollSnapOffsets() override;
+
+	void forceSetAllFontColor(PIELIGHT colour);
+
 private:
 	std::vector<std::unique_ptr<ParagraphElement>> elements;
 	bool layoutDirty = true;
@@ -152,6 +156,8 @@ private:
 	bool hasElementWithLayoutDirty() const;
 	void updateLayout();
 	std::vector<std::vector<FlowLayoutFragment>> calculateLinesLayout();
+
+	std::vector<uint32_t> scrollSnapOffsets;
 
 	bool isMouseDown = false;
 	std::vector<W_PARAGRAPH_ONCLICK_FUNC> onClickHandlers;

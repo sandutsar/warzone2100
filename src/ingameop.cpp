@@ -49,6 +49,9 @@
 #include "qtscript.h"		// for bInTutorial
 #include "radar.h"
 #include "seqdisp.h"
+#include "campaigninfo.h"
+#include "hci/groups.h"
+#include "screens/netpregamescreen.h"
 
 bool hostQuitConfirmation = true;
 
@@ -254,9 +257,12 @@ static bool _intAddInGameOptions()
 			// add 'load'
 			addIGTextButton(INTINGAMEOP_LOAD_MISSION, INTINGAMEOP_1_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Load Game"), OPALIGN);
 			row++;
-			// add 'save'
-			addIGTextButton(INTINGAMEOP_SAVE_MISSION, INTINGAMEOP_1_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Save Game"), OPALIGN);
-			row++;
+			if (!getCamTweakOption_AutosavesOnly())
+			{
+				// add 'save'
+				addIGTextButton(INTINGAMEOP_SAVE_MISSION, INTINGAMEOP_1_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Save Game"), OPALIGN);
+				row++;
+			}
 		}
 	}
 
@@ -419,6 +425,8 @@ void intAddInGamePopup()
 
 	intMode		= INT_POPUPMSG;			// change interface mode.
 	isInGamePopupUp = true;
+
+	shutdownGameStartScreen();
 }
 
 // ////////////////////////////////////////////////////////////////////////////
@@ -535,6 +543,8 @@ bool intCloseInGameOptions(bool bPutUpLoadSave, bool bResetMissionWidgets)
 		resetMissionWidgets();
 	}
 
+	// the setting for group menu display may have been modified
+	intShowGroupSelectionMenu();
 	return true;
 }
 
@@ -618,15 +628,6 @@ static bool startIGGraphicsOptionsMenu()
 	ingameOp->id = INTINGAMEOP;
 
 	int row = 1;
-	// FMV mode.
-	addIGTextButton(INTINGAMEOP_FMVMODE,   INTINGAMEOP_2_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Video Playback"), WBUT_PLAIN);
-	addIGTextButton(INTINGAMEOP_FMVMODE_R, INTINGAMEOP_MID, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, graphicsOptionsFmvmodeString(), WBUT_PLAIN);
-	row++;
-
-	// Scanlines
-	addIGTextButton(INTINGAMEOP_SCANLINES,   INTINGAMEOP_2_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Scanlines"), WBUT_PLAIN);
-	addIGTextButton(INTINGAMEOP_SCANLINES_R, INTINGAMEOP_MID, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, graphicsOptionsScanlinesString(), WBUT_PLAIN);
-	row++;
 
 	// Shadows
 	addIGTextButton(INTINGAMEOP_SHADOWS,   INTINGAMEOP_2_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Shadows"), WBUT_PLAIN);
@@ -643,9 +644,24 @@ static bool startIGGraphicsOptionsMenu()
 	addIGTextButton(INTINGAMEOP_RADAR_JUMP_R, INTINGAMEOP_MID, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, graphicsOptionsRadarJumpString(), WBUT_PLAIN);
 	row++;
 
+	// FMV mode.
+	addIGTextButton(INTINGAMEOP_FMVMODE,   INTINGAMEOP_2_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Video Playback"), WBUT_PLAIN);
+	addIGTextButton(INTINGAMEOP_FMVMODE_R, INTINGAMEOP_MID, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, graphicsOptionsFmvmodeString(), WBUT_PLAIN);
+	row++;
+
+	// Scanlines
+	addIGTextButton(INTINGAMEOP_SCANLINES,   INTINGAMEOP_2_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Scanlines"), WBUT_PLAIN);
+	addIGTextButton(INTINGAMEOP_SCANLINES_R, INTINGAMEOP_MID, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, graphicsOptionsScanlinesString(), WBUT_PLAIN);
+	row++;
+
 	// Screen shake
 	addIGTextButton(INTINGAMEOP_SCREENSHAKE,   INTINGAMEOP_2_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Shake"), WBUT_PLAIN);
 	addIGTextButton(INTINGAMEOP_SCREENSHAKE_R, INTINGAMEOP_MID, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, graphicsOptionsScreenShakeString(), WBUT_PLAIN);
+	row++;
+
+	// Groups Menu
+	addIGTextButton(INTINGAMEOP_GROUPS,   INTINGAMEOP_2_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, _("Groups Menu"), WBUT_PLAIN);
+	addIGTextButton(INTINGAMEOP_GROUPS_R, INTINGAMEOP_MID, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_OP_W, graphicsOptionsGroupsMenuEnabled(), WBUT_PLAIN);
 	row++;
 
 	addIGTextButton(INTINGAMEOP_GO_BACK, INTINGAMEOP_1_X, INTINGAMEOPAUTO_Y_LINE(row), INTINGAMEOP_SW_W, _("Go Back"), OPALIGN);
@@ -698,6 +714,12 @@ static bool runIGGraphicsOptionsMenu(UDWORD id)
 	case INTINGAMEOP_SCREENSHAKE_R:
 		setShakeStatus(!getShakeStatus());
 		widgSetString(psWScreen, INTINGAMEOP_SCREENSHAKE_R, graphicsOptionsScreenShakeString());
+		break;
+	case INTINGAMEOP_GROUPS:
+	case INTINGAMEOP_GROUPS_R:
+		setGroupButtonEnabled(!getGroupButtonEnabled());
+		war_setGroupsMenuEnabled(getGroupButtonEnabled()); // persist
+		widgSetString(psWScreen, INTINGAMEOP_GROUPS_R, graphicsOptionsGroupsMenuEnabled());
 		break;
 
 	case INTINGAMEOP_GO_BACK:

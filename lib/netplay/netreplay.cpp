@@ -18,7 +18,7 @@
 	Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
-#include <3rdparty/json/json.hpp> // Must come before WZ includes
+#include <nlohmann/json.hpp> // Must come before WZ includes
 
 #include "lib/framework/frame.h"
 #include "lib/framework/physfs_ext.h"
@@ -47,8 +47,6 @@
 #include "netreplay.h"
 #include "netplay.h"
 
-#define MAX_REPLAY_FILES 36
-
 static PHYSFS_file *replaySaveHandle = nullptr;
 static PHYSFS_file *replayLoadHandle = nullptr;
 
@@ -61,14 +59,15 @@ typedef std::vector<uint8_t> SerializedNetMessagesBuffer;
 static moodycamel::BlockingReaderWriterQueue<SerializedNetMessagesBuffer> serializedBufferWriteQueue(256);
 static SerializedNetMessagesBuffer latestWriteBuffer;
 static size_t minBufferSizeToQueue = DefaultReplayBufferSize;
-static std::unique_ptr<wz::thread> saveThread;
+static WZ_THREAD *saveThread = nullptr;
 
 // This function is run in its own thread! Do not call any non-threadsafe functions!
-static void replaySaveThreadFunc(PHYSFS_file *pSaveHandle)
+static int replaySaveThreadFunc(void *data)
 {
+	PHYSFS_file *pSaveHandle = (PHYSFS_file *)data;
 	if (pSaveHandle == nullptr)
 	{
-		return;
+		return 1;
 	}
 	SerializedNetMessagesBuffer item;
 	while (true)
@@ -81,9 +80,10 @@ static void replaySaveThreadFunc(PHYSFS_file *pSaveHandle)
 		}
 		WZ_PHYSFS_writeBytes(pSaveHandle, item.data(), item.size());
 	}
+	return 0;
 }
 
-bool NETreplaySaveStart(std::string const& subdir, ReplayOptionsHandler const &optionsHandler, bool appendPlayerToFilename)
+bool NETreplaySaveStart(std::string const& subdir, ReplayOptionsHandler const &optionsHandler, int maxReplaysSaved, bool appendPlayerToFilename)
 {
 	if (NETisReplay())
 	{
@@ -94,16 +94,19 @@ bool NETreplaySaveStart(std::string const& subdir, ReplayOptionsHandler const &o
 
 	ASSERT_OR_RETURN(false, !subdir.empty(), "Must provide a valid subdir");
 
-	// clean up old replay files
-	std::string replayFullDir = "replay/" + subdir;
-	WZ_PHYSFS_cleanupOldFilesInFolder(replayFullDir.c_str(), ".wzrp", MAX_REPLAY_FILES - 1, [](const char *fileName){
-		if (PHYSFS_delete(fileName) == 0)
-		{
-			debug(LOG_ERROR, "Failed to delete old replay file: %s", fileName);
-			return false;
-		}
-		return true;
-	});
+	if (maxReplaysSaved > 0)
+	{
+		// clean up old replay files
+		std::string replayFullDir = "replay/" + subdir;
+		WZ_PHYSFS_cleanupOldFilesInFolder(replayFullDir.c_str(), ".wzrp", maxReplaysSaved - 1, [](const char *fileName){
+			if (PHYSFS_delete(fileName) == 0)
+			{
+				debug(LOG_ERROR, "Failed to delete old replay file: %s", fileName);
+				return false;
+			}
+			return true;
+		});
+	}
 
 	time_t aclock;
 	time(&aclock);                     // Get time in seconds
@@ -184,11 +187,12 @@ bool NETreplaySaveStart(std::string const& subdir, ReplayOptionsHandler const &o
 	debug(LOG_INFO, "Started writing replay file \"%s\".", filename.c_str());
 
 	// Create a background thread and hand off all responsibility for writing to the file handle to it
-	ASSERT(saveThread.get() == nullptr, "Failed to release prior thread");
+	ASSERT(saveThread == nullptr, "Failed to release prior thread");
 	latestWriteBuffer.reserve(minBufferSizeToQueue);
 	if (desiredBufferSize != std::numeric_limits<size_t>::max())
 	{
-		saveThread = std::unique_ptr<wz::thread>(new wz::thread(replaySaveThreadFunc, replaySaveHandle));
+		saveThread = wzThreadCreate(replaySaveThreadFunc, replaySaveHandle, "replaySaveThread");
+		wzThreadStart(saveThread);
 	}
 	else
 	{
@@ -224,8 +228,8 @@ bool NETreplaySaveStop()
 	// Wait for writing thread to finish
 	if (saveThread)
 	{
-		saveThread->join();
-		saveThread.reset();
+		wzThreadJoin(saveThread);
+		saveThread = nullptr;
 	}
 	else
 	{
@@ -414,7 +418,7 @@ bool NETreplayLoadNetMessage(std::unique_ptr<NetMessage> &message, uint8_t &play
 		return false;
 	}
 
-	message = std::unique_ptr<NetMessage>(new NetMessage(type));
+	message = std::make_unique<NetMessage>(type);
 	message->data.resize(len);
 	size_t messageRead = WZ_PHYSFS_readBytes(replayLoadHandle, message->data.data(), message->data.size());
 	if (messageRead != message->data.size())

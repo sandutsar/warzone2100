@@ -23,8 +23,10 @@
 #include "activity.h"
 #include "multiint.h"
 #include "mission.h"
+#include "campaigninfo.h"
 #include "challenge.h"
 #include "modding.h"
+#include "gamehistorylogger.h"
 #include <algorithm>
 #include <mutex>
 
@@ -185,6 +187,12 @@ public:
 		debug(LOG_ACTIVITY, "- loadedModsChanged: %s", modListToStr(loadedModHashes).c_str());
 	}
 
+	// game exit
+	virtual void gameExiting() override
+	{
+		debug(LOG_ACTIVITY, "- game exiting");
+	}
+
 private:
 	std::string modListToStr(const std::vector<Sha256>& modHashes) const
 	{
@@ -213,12 +221,12 @@ public:
 	// Caller is expected to handle thrown exceptions
 	ActivityDatabase(const std::string& activityDatabasePath)
 	{
-		db = std::unique_ptr<SQLite::Database>(new SQLite::Database(activityDatabasePath, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE));
+		db = std::make_unique<SQLite::Database>(activityDatabasePath, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
 		db->exec("PRAGMA journal_mode=WAL");
 		createTables();
-		query_findValueByName = std::unique_ptr<SQLite::Statement>(new SQLite::Statement(*db, "SELECT value FROM general_kv_storage WHERE name = ?"));
-		query_insertValueForName = std::unique_ptr<SQLite::Statement>(new SQLite::Statement(*db, "INSERT OR IGNORE INTO general_kv_storage(name, value) VALUES(?, ?)"));
-		query_updateValueForName = std::unique_ptr<SQLite::Statement>(new SQLite::Statement(*db, "UPDATE general_kv_storage SET value = ? WHERE name = ?"));
+		query_findValueByName = std::make_unique<SQLite::Statement>(*db, "SELECT value FROM general_kv_storage WHERE name = ?");
+		query_insertValueForName = std::make_unique<SQLite::Statement>(*db, "INSERT OR IGNORE INTO general_kv_storage(name, value) VALUES(?, ?)");
+		query_updateValueForName = std::make_unique<SQLite::Statement>(*db, "UPDATE general_kv_storage SET value = ? WHERE name = ?");
 	}
 public:
 	// Must be thread-safe
@@ -332,12 +340,18 @@ private:
 ActivityManager::ActivityManager()
 {
 	ASSERT_OR_RETURN(, PHYSFS_isInit() != 0, "PHYSFS must be initialized before the ActivityManager is created");
+}
+
+void ActivityManager::_initializeDB()
+{
+	ASSERT_OR_RETURN(, activityDatabase == nullptr, "DB already initialized?");
+	ASSERT_OR_RETURN(, PHYSFS_isInit() != 0, "PHYSFS must be initialized before the ActivityManager is created");
 	// init ActivityDatabase
 	const char *pWriteDir = PHYSFS_getWriteDir();
 	ASSERT(pWriteDir != nullptr, "PHYSFS_getWriteDir returned null");
 	if (pWriteDir)
 	{
-		std::string statsDBPath = std::string(pWriteDir) + PHYSFS_getDirSeparator() + "stats.db";
+		std::string statsDBPath = std::string(pWriteDir) + "/" + "stats.db";
 		try {
 			activityDatabase = std::make_shared<ActivityDatabase>(statsDBPath);
 		}
@@ -356,6 +370,7 @@ ActivityManager& ActivityManager::instance()
 
 bool ActivityManager::initialize()
 {
+	_initializeDB();
 	addActivitySink(std::make_shared<LoggingActivitySink>());
 	return true;
 }
@@ -376,7 +391,7 @@ void ActivityManager::addActivitySink(std::shared_ptr<ActivitySink> sink)
 
 void ActivityManager::removeActivitySink(const std::shared_ptr<ActivitySink>& sink)
 {
-	activitySinks.erase(std::remove(activitySinks.begin(), activitySinks.end(), sink));
+	activitySinks.erase(std::remove(activitySinks.begin(), activitySinks.end(), sink), activitySinks.end());
 }
 
 ActivitySink::GameMode ActivityManager::getCurrentGameMode() const
@@ -415,7 +430,7 @@ void ActivityManager::startingSavedGame()
 	ActivitySink::GameMode mode = currentGameTypeToMode();
 	bEndedCurrentMission = false;
 
-	if (mode == ActivitySink::GameMode::SKIRMISH || (mode == ActivitySink::GameMode::MULTIPLAYER && NETisReplay()))
+	if (mode == ActivitySink::GameMode::SKIRMISH || mode == ActivitySink::GameMode::CHALLENGE || (mode == ActivitySink::GameMode::MULTIPLAYER && NETisReplay()))
 	{
 		// synthesize an "update multiplay game data" call on skirmish save game load (or loading MP replay)
 		ActivityManager::instance().updateMultiplayGameData(game, ingame, false);
@@ -518,6 +533,8 @@ void ActivityManager::preSystemShutdown()
 		// quitGame was never generated - synthesize it
 		ActivityManager::instance().quitGame(collectEndGameStatsData(), Cheated);
 	}
+
+	for (auto sink : activitySinks) { sink->gameExiting(); }
 }
 
 void ActivityManager::navigateToMenu(const std::string& menuName)

@@ -45,6 +45,10 @@
 #include "wrappers.h"
 #include "titleui/titleui.h"
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
+
 struct STAR
 {
 	int      xPos;
@@ -91,7 +95,7 @@ static void setupLoadingScreen()
 	barLeftX = barRightX - boxWidth;
 	barLeftY = barRightY - boxHeight;
 
-	starsNum = boxWidth / boxHeight;
+	starsNum = boxWidth / std::max<int>(boxHeight, 1);
 	starHeight = static_cast<int>(2.0 * h / 640.0);
 
 	if (!stars)
@@ -107,7 +111,7 @@ static void setupLoadingScreen()
 
 bool recalculateEffectiveHeadlessValue()
 {
-	if (hostlaunch == HostLaunch::Skirmish || hostlaunch == HostLaunch::Autohost || autogame_enabled())
+	if (hostlaunch == HostLaunch::Skirmish || hostlaunch == HostLaunch::Autohost || hostlaunch == HostLaunch::LoadReplay || autogame_enabled())
 	{
 		// only support headless mode if hostlaunch is --skirmish or --autogame
 		return bHeadlessAutoGameModeCLIOption;
@@ -155,7 +159,12 @@ TITLECODE titleLoop()
 	TITLECODE RetCode = TITLECODE_CONTINUE;
 
 	pie_SetFogStatus(false);
-	screen_RestartBackDrop();
+	if (screen_RestartBackDrop())
+	{
+		// changed value - draw the backdrop
+		// otherwise, pie_ScreenFrameRenderBegin handles drawing it
+		screen_Display();
+	}
 	wzShowMouse(true);
 
 	// When we first init the game, firstcall is true.
@@ -218,7 +227,6 @@ TITLECODE titleLoop()
 	audio_Update();
 
 	pie_SetFogStatus(false);
-	pie_ScreenFlip(CLEAR_BLACK);//title loop
 
 	if ((keyDown(KEY_LALT) || keyDown(KEY_RALT)) && keyPressed(KEY_RETURN))
 	{
@@ -242,6 +250,7 @@ void loadingScreenCallback()
 	{
 		return;
 	}
+
 	lastTick = currTick;
 
 	/* Draw the black rectangle at the bottom, with a two pixel border */
@@ -265,21 +274,42 @@ void loadingScreenCallback()
 		}
 	}
 
-	pie_ScreenFlip(CLEAR_OFF_AND_NO_BUFFER_DOWNLOAD);//loading callback		// don't clear.
+	pie_ScreenFrameRenderEnd();
+	pie_ScreenFrameRenderBegin();
+
 	audio_Update();
 
 	wzPumpEventsWhileLoading();
 }
 
+#if defined(__EMSCRIPTEN__)
+void wzemscripten_display_web_loading_indicator(int x)
+{
+	MAIN_THREAD_EM_ASM({
+		if (typeof wz_js_display_loading_indicator === "function") {
+			wz_js_display_loading_indicator($0);
+		}
+		else {
+			console.log('Cannot find wz_js_display_loading_indicator function');
+		}
+	}, x);
+}
+#endif
+
 // fill buffers with the static screen
 void initLoadingScreen(bool drawbdrop)
 {
+	pie_ScreenFrameRenderBegin(); // start a frame *if one isn't yet started*
 	setupLoadingScreen();
 	wzShowMouse(false);
 	pie_SetFogStatus(false);
 
+#if !defined(__EMSCRIPTEN__)
 	// setup the callback....
 	resSetLoadCallback(loadingScreenCallback);
+#else
+	wzemscripten_display_web_loading_indicator(1);
+#endif
 
 	if (drawbdrop)
 	{
@@ -293,10 +323,6 @@ void initLoadingScreen(bool drawbdrop)
 	{
 		screen_StopBackDrop();
 	}
-
-	// Start with two cleared buffers as the hacky loading screen code re-uses old buffers to create its effect.
-	pie_ScreenFlip(CLEAR_BLACK);
-	pie_ScreenFlip(CLEAR_BLACK);
 }
 
 // shut down the loading screen
@@ -307,8 +333,11 @@ void closeLoadingScreen()
 		free(stars);
 		stars = nullptr;
 	}
+#if !defined(__EMSCRIPTEN__)
 	resSetLoadCallback(nullptr);
-	pie_ScreenFlip(CLEAR_BLACK);
+#else
+	wzemscripten_display_web_loading_indicator(0);
+#endif
 }
 
 

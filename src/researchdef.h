@@ -65,8 +65,8 @@ struct RESEARCH : public BASE_STATS
 	VIEWDATA                *pViewData;             ///< Data used to display a message in the Intelligence Screen
 	UWORD			iconID;				/* the ID from 'Framer' for which graphic to draw in interface*/
 	BASE_STATS      *psStat;   /* A stat used to define which graphic is drawn instead of the two fields below */
-	iIMDShape		*pIMD;		/* the IMD to draw for this research topic */
-	iIMDShape		*pIMD2;		/* the 2nd IMD for base plates/turrets*/
+	iIMDBaseShape		*pIMD;		/* the IMD to draw for this research topic */
+	iIMDBaseShape		*pIMD2;		/* the 2nd IMD for base plates/turrets*/
 	int index;		///< Unique index for this research, set incrementally
 
 	RESEARCH() : pViewData(nullptr), iconID(0), psStat(nullptr), pIMD(nullptr), pIMD2(nullptr) {}
@@ -89,7 +89,7 @@ struct PLAYER_RESEARCH
 #define STARTED_RESEARCH_PENDING   0x10            // research almost in progress, waiting for GAME_RESEARCHSTATUS message to be processed.
 #define RESBITS (STARTED_RESEARCH|CANCELLED_RESEARCH|RESEARCHED)
 #define RESBITS_PENDING_ONLY (STARTED_RESEARCH_PENDING|CANCELLED_RESEARCH_PENDING)
-#define RESBITS_PENDING (RESBITS|RESBITS_PENDING_ONLY)
+#define RESBITS_ALL (RESBITS|RESBITS_PENDING_ONLY)
 
 #define RESEARCH_IMPOSSIBLE        0x00            // research is (temporarily) not possible
 #define RESEARCH_POSSIBLE          0x01            // research is possible
@@ -156,17 +156,17 @@ static inline bool IsResearchStartedPending(PLAYER_RESEARCH const *x)
 
 static inline void MakeResearchCompleted(PLAYER_RESEARCH *x)
 {
-	x->ResearchStatus &= ~RESBITS_PENDING;
+	x->ResearchStatus &= ~RESBITS_ALL;
 	x->ResearchStatus |= RESEARCHED;
 }
 static inline void MakeResearchCancelled(PLAYER_RESEARCH *x)
 {
-	x->ResearchStatus &= ~RESBITS_PENDING;
+	x->ResearchStatus &= ~RESBITS_ALL;
 	x->ResearchStatus |= CANCELLED_RESEARCH;
 }
 static inline void MakeResearchStarted(PLAYER_RESEARCH *x)
 {
-	x->ResearchStatus &= ~RESBITS_PENDING;
+	x->ResearchStatus &= ~RESBITS_ALL;
 	x->ResearchStatus |= STARTED_RESEARCH;
 }
 /// Pending means not yet synchronised, so only permitted to affect the UI, not the game state.
@@ -188,7 +188,7 @@ static inline void ResetPendingResearchStatus(PLAYER_RESEARCH *x)
 /// clear all bits in the status except for the possible bit
 static inline void ResetResearchStatus(PLAYER_RESEARCH *x)
 {
-	x->ResearchStatus &= ~RESBITS_PENDING;
+	x->ResearchStatus &= ~RESBITS_ALL;
 }
 
 void RecursivelyDisableResearchByFlags(UBYTE flags);

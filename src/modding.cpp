@@ -40,6 +40,7 @@ bool use_override_mods = false;
 
 static std::vector<WzMods::LoadedMod> loaded_mods;
 static std::string mod_list;
+static std::vector<std::string> mod_names_list;
 static std::vector<Sha256> mod_hash_list;
 
 
@@ -81,7 +82,7 @@ static inline std::string join(std::vector<std::string> const &strs, std::string
 	return str;
 }
 
-static WzString convertToPlatformDependentPath(const char *platformIndependentPath)
+WzString convertToPlatformDependentPath(const char *platformIndependentPath)
 {
 	WzString path(platformIndependentPath);
 
@@ -102,8 +103,9 @@ static WzString convertToPlatformDependentPath(const char *platformIndependentPa
  * \param appendToPath Whether to append or prepend
  * \param checkList List of directories to check. NULL means any.
  */
-void addSubdirs(const char *basedir, const char *subdir, const bool appendToPath, std::vector<std::string> const *checkList, bool addToModList)
+size_t addSubdirs(const char *basedir, const char *subdir, const bool appendToPath, std::vector<std::string> const *checkList, bool addToModList)
 {
+	size_t numAddedMods = 0;
 	const WzString subdir_platformDependent = convertToPlatformDependentPath(subdir);
 	WZ_PHYSFS_enumerateFiles(subdir, [&](const char *i) -> bool {
 #ifdef DEBUG
@@ -125,9 +127,11 @@ void addSubdirs(const char *basedir, const char *subdir, const bool appendToPath
 				addDumpInfo(buf);
 			}
 			PHYSFS_mount(tmpstr, NULL, appendToPath); // platform-dependent notation
+			numAddedMods++;
 		}
 		return true; // continue
 	});
+	return numAddedMods;
 }
 
 void removeSubdirs(const char *basedir, const char *subdir)
@@ -179,16 +183,35 @@ void clearOverrideMods()
 	use_override_mods = false;
 }
 
+bool hasOverrideMods()
+{
+	return !override_mods.empty();
+}
+
+void clearCampaignMods()
+{
+	campaign_mods.clear();
+}
+
+bool hasCampaignMods()
+{
+	return !campaign_mods.empty();
+}
+
 static void addLoadedMod(std::string modname, std::string filename)
 {
 	// Note, findHashOfFile won't work right now, since the search paths aren't set up until after all calls to addSubdirs, see rebuildSearchPath in init.cpp.
-	loaded_mods.push_back({std::move(modname), std::move(filename)});
+	loaded_mods.emplace_back(std::move(modname), std::move(filename));
+	mod_list.clear();
+	mod_names_list.clear();
+	mod_hash_list.clear();
 }
 
 void clearLoadedMods()
 {
 	loaded_mods.clear();
 	mod_list.clear();
+	mod_names_list.clear();
 	mod_hash_list.clear();
 }
 
@@ -215,13 +238,41 @@ std::string const &getModList()
 	return mod_list;
 }
 
+std::vector<std::string> const &getModNamesList()
+{
+	if (mod_names_list.empty())
+	{
+		for (auto const &mod : loaded_mods)
+		{
+			mod_names_list.push_back(mod.name);
+		}
+		std::sort(mod_names_list.begin(), mod_names_list.end());
+		mod_names_list.erase(std::unique(mod_names_list.begin(), mod_names_list.end()), mod_names_list.end());
+	}
+	return mod_names_list;
+}
+
+WzMods::LoadedMod::LoadedMod(const std::string& name, const std::string& filename)
+: name(name)
+, filename(filename)
+{ }
+
+Sha256& WzMods::LoadedMod::getHash()
+{
+	if (fileHash.isZero())
+	{
+		fileHash = findHashOfFile(filename.c_str());
+	}
+	return fileHash;
+}
+
 std::vector<Sha256> const &getModHashList()
 {
 	if (mod_hash_list.empty())
 	{
-		for (auto const &mod : loaded_mods)
+		for (auto &mod : loaded_mods)
 		{
-			Sha256 hash = findHashOfFile(mod.filename.c_str());
+			Sha256& hash = mod.getHash();
 			debug(LOG_WZ, "Mod[%s]: %s\n", hash.toString().c_str(), mod.filename.c_str());
 			mod_hash_list.push_back(hash);
 		}

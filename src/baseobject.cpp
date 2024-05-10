@@ -19,7 +19,7 @@
 */
 
 #include "lib/framework/frame.h"
-#include "lib/netplay/netplay.h"
+#include "lib/netplay/sync_debug.h"
 #include "lib/sound/audio.h"
 
 #include "baseobject.h"
@@ -115,11 +115,12 @@ BASE_OBJECT::BASE_OBJECT(OBJECT_TYPE type, uint32_t id, unsigned player)
 BASE_OBJECT::~BASE_OBJECT()
 {
 	visRemoveVisibility(this);
+}
 
-#ifdef DEBUG
-	psNext = this;                                                       // Hopefully this will trigger an infinite loop       if someone uses the freed object.
-	psNextFunc = this;                                                   // Hopefully this will trigger an infinite loop       if someone uses the freed object.
-#endif //DEBUG
+
+WEAPON_STATS* BASE_OBJECT::getWeaponStats(int weaponSlot) const
+{
+	return &asWeaponStats[asWeaps[weaponSlot].nStat];
 }
 
 // Query visibility for display purposes (i.e. for `selectedPlayer`)

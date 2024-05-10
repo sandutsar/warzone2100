@@ -30,7 +30,7 @@ parameter can be a **game object** to pass to the timer function. If the **game 
 dies, the timer stops running. The minimum number of milliseconds is 100, but such
 fast timers are strongly discouraged as they may deteriorate the game performance.
 
-```javascript
+```js
 function conDroids()
 {
   ... do stuff ...
@@ -66,7 +66,7 @@ inside an event.
 
 Returns the function name of the caller of the current context as a string (if available).
 ex.
-```javascript
+```js
 function funcA() {
   const callerFuncName = debugGetCallerFuncName();
   debug(callerFuncName);
@@ -86,6 +86,11 @@ Return an array containing all the buildable templates for the given player. (3.
 ## removeReticuleButton(buttonId)
 
 Remove reticule button. DO NOT USE FOR ANYTHING.
+
+## removeBeacon(playerFilter)
+
+Remove a beacon message sent to target player. Target may also be ```ALLIES```.
+Returns a boolean that is true on success. (3.2+ only)
 
 ## resetLabel(labelName[, playerFilter])
 
@@ -215,6 +220,10 @@ Move the position of the Sun, which in turn moves where shadows are cast. (3.2+ 
 
 Set the ambient, diffuse and specular colour intensities of the Sun lighting source. (3.2+ only)
 
+## setFogColour(r, g, b)
+
+Set the colour of the fog (4.2.5+ only)
+
 ## setWeather(weatherType)
 
 Set the current weather. This should be one of ```WEATHER_RAIN```, ```WEATHER_SNOW``` or ```WEATHER_CLEAR```. (3.2+ only)
@@ -259,8 +268,9 @@ looks, or to add variety to the looks of droids in campaign missions. (3.2+ only
 
 ## changePlayerColour(player, colour)
 
-Change a player's colour slot. The current player colour can be read from the ```playerData``` array. There are as many
-colour slots as the maximum number of players. (3.2.3+ only)
+Change a player's colour slot. The current player colour can be read from the ```playerData``` array. Available colours
+are green, orange, gray, black, red, blue, pink, cyan, yellow, purple, white, bright blue, neon green, infrared,
+ultraviolet, and brown, represented by the integers 0 - 15 respectively.
 
 ## setHealth(object, health)
 
@@ -760,11 +770,12 @@ Limit the scrollable area of the map to the given rectangle. (3.2+ only)
 
 Get the limits of the scrollable area of the map as an area object. (3.2+ only)
 
-## addStructure(structureName, player, x, y)
+## addStructure(structureName, player, x, y[, direction])
 
 Create a structure on the given position. Returns the structure on success, null otherwise.
 Position uses world coordinates, if you want use position based on Map Tiles, then
 use as addStructure(structureName, players, x*128, y*128)
+Direction is optional, and is specified in degrees.
 
 ## getStructureLimit(structureName[, player])
 

@@ -5,14 +5,21 @@ on:
     branches-ignore:
       - 'l10n_**' # Push events to translation service branches (that begin with "l10n_")
   pull_request:
-    # Match all pull requests
+    # Match all pull requests...
+    paths-ignore:
+      # Except some text-only files / documentation
+      - 'ChangeLog'
+      # Except those that only include changes to stats
+      - 'data/base/stats/**'
+      - 'data/mp/stats/**'
+      - 'data/mp/multiplay/script/functions/camTechEnabler.js'
   # Support running after "Draft Tag Release" workflow completes, as part of automated release process
   workflow_run:
     workflows: ["Draft Tag Release"]
     push:
       tags:
         - '*'
-    types: 
+    types:
       - completed
 
 jobs:
@@ -23,10 +30,12 @@ jobs:
           - name: "Snapcraft"
             arch: "amd64"
     name: '${{ matrix.name }}'
-    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to upload to releases
+    runs-on: ubuntu-20.04 # Use instead of ubuntu-latest until https://github.com/snapcore/action-build/issues/42 is resolved
     if: "!contains(github.event.head_commit.message, '[ci skip]')"
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: Configure Repo Checkout
@@ -71,7 +80,7 @@ jobs:
           WZ_PACKAGE_VAR_OVERRIDES="-D WZ_DEVELOPMENT_BUILD=ON"
         fi
         WZ_SNAP_PACKAGE_NAME=$(echo "warzone2100${WZ_OUTPUT_NAME_SUFFIX}" | sed 's/[^a-zA-Z0-9\.\+\-]/-/g')
-        
+
         cat > .snapenv <<EOENV
         CI=true
         GITHUB_WORKFLOW="$GITHUB_WORKFLOW"
@@ -103,7 +112,7 @@ jobs:
         echo "  -> SHA512: $(sha512sum "${OUTPUT_DIR}/${OUTPUT_FILE_NAME}")"
         echo "  -> Size (bytes): $(stat -c %s "${OUTPUT_DIR}/${OUTPUT_FILE_NAME}")"
         echo "WZ_FULL_OUTPUT_SNAP_PATH=${OUTPUT_DIR}/${OUTPUT_FILE_NAME}" >> $GITHUB_ENV
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       if: success()
       with:
         name: 'warzone2100_linux_${{ matrix.arch }}_snap'

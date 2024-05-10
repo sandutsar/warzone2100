@@ -22,11 +22,11 @@
 #include "frame.h"
 
 #include <set>
-#include <optional-lite/optional.hpp>
+#include <nonstd/optional.hpp>
 using nonstd::optional;
 using nonstd::nullopt;
 
-bool WZ_PHYSFS_enumerateFiles(const char *dir, const std::function<bool (char* file)>& enumFunc)
+bool WZ_PHYSFS_enumerateFiles(const char *dir, const std::function<bool (const char* file)>& enumFunc)
 {
 	char **files = PHYSFS_enumerateFiles(dir);
 	if (!files)
@@ -45,7 +45,7 @@ bool WZ_PHYSFS_enumerateFiles(const char *dir, const std::function<bool (char* f
 	return true;
 }
 
-bool WZ_PHYSFS_enumerateFolders(const std::string &dir, const std::function<bool (char* folder)>& enumFunc)
+bool WZ_PHYSFS_enumerateFolders(const std::string &dir, const std::function<bool (const char* folder)>& enumFunc)
 {
 	char **files = PHYSFS_enumerateFiles(dir.c_str());
 	if (!files)

@@ -33,7 +33,6 @@ An event that is run before game is saved. There is usually no need to use this 
 
 An event that is run after game is saved. There is usually no need to use this event.
 
-
 ## eventTransporterLaunch(transport)
 
 An event that is run when the mission transporter has been ordered to fly off.
@@ -248,8 +247,3 @@ An event that is called whenever an alliance is broken.
 An event that is called from a script and synchronized with all other scripts and hosts
 to prevent desync from happening. Sync requests must be carefully validated to prevent
 cheating!
-
-## eventKeyPressed(meta, key)
-
-An event that is called whenever user presses a key in the game, not counting chat
-or other pop-up user interfaces. The key values are currently undocumented.

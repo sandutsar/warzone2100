@@ -11,16 +11,16 @@ cmake_minimum_required(VERSION 3.5)
 ########################################################
 
 # To ensure reproducible builds, pin to a specific vcpkg commit
-set(VCPKG_COMMIT_SHA "5bb0c7fc45da94844dfac35c8e441758e03e7666")
+set(VCPKG_COMMIT_SHA "9de2e978bdfec6bb7852cc1d6ecf375c923c485c")
 
-# WZ minimum supported macOS deployment target (this is 10.10 because of Qt 5.9.x)
-set(MIN_SUPPORTED_MACOSX_DEPLOYMENT_TARGET "10.10")
+# WZ minimum supported macOS deployment target (< 10.9 is untested)
+set(MIN_SUPPORTED_MACOSX_DEPLOYMENT_TARGET "10.9")
 
 # Vulkan SDK
-set(VULKAN_SDK_VERSION "1.2.189.0")
+set(VULKAN_SDK_VERSION "1.3.268.1")
 set(VULKAN_SDK_DL_FILENAME "vulkansdk-macos-${VULKAN_SDK_VERSION}.dmg")
 set(VULKAN_SDK_DL_URL "https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/mac/${VULKAN_SDK_DL_FILENAME}?Human=true")
-set(VULKAN_SDK_DL_SHA256 "0e2f9bf489988211480e0530299096cdfa2650ee120337417cd8f439592abd68")
+set(VULKAN_SDK_DL_SHA256 "900c019ffac72564d7c4e9e52dd08ef7d4eb2b4425084fd4d2c3e35b36958646")
 
 ########################################################
 
@@ -101,25 +101,25 @@ if((CMAKE_HOST_SYSTEM_NAME MATCHES "^Darwin$") AND (DARWIN_VERSION VERSION_GREAT
 		if(EXISTS "${_full_vulkan_install_path}")
 			file(REMOVE_RECURSE "${_full_vulkan_install_path}")
 		endif()
+
+		# ./InstallVulkan.app/Contents/MacOS/InstallVulkan --root ${_full_vulkan_install_path} --accept-licenses --default-answer --confirm-command install --copy_only=1
+		execute_process(
+			COMMAND ./InstallVulkan.app/Contents/MacOS/InstallVulkan
+					--root ${_full_vulkan_install_path}
+					--accept-licenses
+					--default-answer
+					--confirm-command install
+					copy_only=1
+			WORKING_DIRECTORY "${_full_vulkan_dl_path}"
+			RESULT_VARIABLE _exstatus
+		)
+		if(NOT _exstatus EQUAL 0)
+			message(FATAL_ERROR "Failed to extract Vulkan SDK (exit code: ${_exstatus})")
+		endif()
+
+		file(WRITE "${_full_vulkan_install_path}/.SHA256SumLoc" "${VULKAN_SDK_DL_SHA256}")
 	endif()
 	unset(_strings_existing_sha256)
-
-	# ./InstallVulkan.app/Contents/MacOS/InstallVulkan --root ${_full_vulkan_install_path} --accept-licenses --default-answer --confirm-command install --copy_only=1
-	execute_process(
-		COMMAND ./InstallVulkan.app/Contents/MacOS/InstallVulkan
-				--root ${_full_vulkan_install_path}
-				--accept-licenses
-				--default-answer
-				--confirm-command install
-				copy_only=1
-		WORKING_DIRECTORY "${_full_vulkan_dl_path}"
-		RESULT_VARIABLE _exstatus
-	)
-	if(NOT _exstatus EQUAL 0)
-		message(FATAL_ERROR "Failed to extract Vulkan SDK (exit code: ${_exstatus})")
-	endif()
-
-	file(WRITE "${_full_vulkan_install_path}/.SHA256SumLoc" "${VULKAN_SDK_DL_SHA256}")
 
 	if(DEFINED ENV{GITHUB_ACTIONS} AND "$ENV{GITHUB_ACTIONS}" STREQUAL "true")
 		execute_process(COMMAND ${CMAKE_COMMAND} -E echo "::endgroup::")
@@ -320,11 +320,13 @@ else()
 	set(_additional_vcpkg_flags ${ADDITIONAL_VCPKG_FLAGS} --x-no-default-features)
 endif()
 
+set(_overlay_ports_path "${_repoBase}/.ci/vcpkg/overlay-ports")
+
 set(_vcpkgInstallResult -1)
 set(_vcpkgAttempts 0)
 while(NOT _vcpkgInstallResult EQUAL 0 AND _vcpkgAttempts LESS 3)
 	execute_process(
-		COMMAND ./vcpkg/vcpkg install --x-manifest-root=${_repoBase} --x-install-root=./vcpkg_installed/ ${_additional_vcpkg_flags}
+		COMMAND ./vcpkg/vcpkg install --vcpkg-root=./vcpkg/ --x-manifest-root=${_repoBase} --x-install-root=./vcpkg_installed/ --overlay-ports=${_overlay_ports_path} ${_additional_vcpkg_flags}
 		RESULT_VARIABLE _vcpkgInstallResult
 	)
 	MATH(EXPR _vcpkgAttempts "${_vcpkgAttempts}+1")
@@ -345,22 +347,26 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E echo "++ vcpkg install finished")
 # 3.) CMake configure (generate Xcode project)
 
 set(_additional_configure_arguments "")
-if(DEFINED WZ_DISTRIBUTOR)
-	set(_additional_configure_arguments "\"-DWZ_DISTRIBUTOR:STRING=${WZ_DISTRIBUTOR}\"")
+if(NOT DEFINED WZ_DISTRIBUTOR)
+    set(WZ_DISTRIBUTOR "UNKNOWN")
 endif()
+list(APPEND _additional_configure_arguments "-DCMAKE_FIND_USE_CMAKE_SYSTEM_PATH=FALSE" "-DCMAKE_FIND_USE_INSTALL_PREFIX=FALSE" "-DCMAKE_FIND_USE_PACKAGE_REGISTRY=FALSE" "-DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=FALSE")
 if(DEFINED ADDITIONAL_CMAKE_ARGUMENTS)
 	list(APPEND _additional_configure_arguments ${ADDITIONAL_CMAKE_ARGUMENTS})
 endif()
 
 execute_process(COMMAND ${CMAKE_COMMAND} -E echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 execute_process(COMMAND ${CMAKE_COMMAND} -E echo "++ Running CMake configure (to generate Xcode project)...")
+string(REPLACE ";" " " _debug_output_args "${_additional_configure_arguments}")
+execute_process(COMMAND ${CMAKE_COMMAND} -E echo "++ ${CMAKE_COMMAND} \"-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake\" \"-DWZ_DISTRIBUTOR:STRING=${WZ_DISTRIBUTOR}\" ${_debug_output_args} -G Xcode -B . -S \"${_repoBase}\"")
 execute_process(
 	COMMAND ${CMAKE_COMMAND}
 		"-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-		-DGLEW_USE_STATIC_LIBS=ON
+		"-DWZ_DISTRIBUTOR:STRING=${WZ_DISTRIBUTOR}"
 		${_additional_configure_arguments}
 		-G Xcode
-		"${_repoBase}"
+		-B .
+		-S "${_repoBase}"
 	RESULT_VARIABLE _exstatus
 )
 

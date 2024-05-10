@@ -20,6 +20,7 @@
 #ifndef _LIB_FRAMEWORK_WZSTRING_H
 #define _LIB_FRAMEWORK_WZSTRING_H
 
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <locale>
@@ -101,6 +102,7 @@ public:
 	WzString& remove(const WzString &substr);
 
 	void truncate(int position);
+	bool pop_back();
 	void clear();
 
 	WzString toLower() const;

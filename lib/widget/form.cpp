@@ -100,6 +100,34 @@ void W_CLICKFORM::setFlash(bool enable)
 	dirty = true;
 }
 
+void W_CLICKFORM::run(W_CONTEXT *psContext)
+{
+	W_FORM::run(psContext);
+
+	if (clickDownStart.has_value())
+	{
+		const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+		if (std::chrono::duration_cast<std::chrono::milliseconds>(now - clickDownStart.value()) >= widgGetClickHoldMS())
+		{
+			if (clickDownKey.has_value())
+			{
+				if (clickHeld(psContext, clickDownKey.value()))
+				{
+					// clear button down state, as the clickHeld event "consumed" this click
+					state &= ~WBUT_DOWN;
+				}
+			}
+			clickDownStart.reset();
+		}
+	}
+}
+
+// Returns true if "consumed" held click
+bool W_CLICKFORM::clickHeld(W_CONTEXT *psContext, WIDGET_KEY key)
+{
+	return false;
+}
+
 bool W_FORM::isUserMovable() const
 {
 	return userMovable || formState == FormState::MINIMIZED;
@@ -185,6 +213,8 @@ void W_CLICKFORM::clicked(W_CONTEXT *psContext, WIDGET_KEY key)
 		{
 			state &= ~WBUT_FLASH;  // Stop it flashing
 			state |= WBUT_DOWN;
+			clickDownStart = std::chrono::steady_clock::now();
+			clickDownKey = key;
 			dirty = true;
 
 			if (AudioCallback != nullptr)
@@ -211,6 +241,9 @@ void W_CLICKFORM::released(W_CONTEXT *, WIDGET_KEY key)
 			dirty = true;
 		}
 	}
+
+	clickDownStart = nullopt;
+	clickDownKey = nullopt;
 }
 
 
@@ -237,6 +270,8 @@ void W_CLICKFORM::highlightLost()
 	W_FORM::highlightLost();
 
 	state &= ~(WBUT_DOWN | WBUT_HIGHLIGHT);
+	clickDownStart = nullopt;
+	clickDownKey = nullopt;
 	dirty = true;
 }
 
@@ -265,7 +300,7 @@ void W_FORM::screenSizeDidChange(int oldWidth, int oldHeight, int newWidth, int 
 	WIDGET::screenSizeDidChange(oldWidth, oldHeight, newWidth, newHeight);
 }
 
-bool W_FORM::hitTest(int x, int y)
+bool W_FORM::hitTest(int x, int y) const
 {
 	if (!minimizable || formState != FormState::MINIMIZED)
 	{
@@ -419,6 +454,11 @@ void W_CLICKFORM::setTip(std::string string)
 	pTip = string;
 }
 
+void W_CLICKFORM::setHelp(optional<WidgetHelp> _help)
+{
+	help = _help;
+}
+
 bool W_CLICKFORM::isDown() const
 {
 	return (state & (WBUT_DOWN | WBUT_LOCK | WBUT_CLICKLOCK)) != 0;
@@ -449,7 +489,7 @@ std::shared_ptr<W_FULLSCREENOVERLAY_CLICKFORM> W_FULLSCREENOVERLAY_CLICKFORM::ma
 	sInit.width = screenWidth - 1;
 	sInit.height = screenHeight - 1;
 	sInit.calcLayout = LAMBDA_CALCLAYOUT_SIMPLE({
-		psWidget->setGeometry(0, 0, screenWidth - 1, screenHeight - 1);
+		psWidget->setGeometry(0, 0, screenWidth, screenHeight);
 	});
 
 	class make_shared_enabler: public W_FULLSCREENOVERLAY_CLICKFORM

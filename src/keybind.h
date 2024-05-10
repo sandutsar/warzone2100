@@ -24,6 +24,7 @@
 #include "console.h"
 #include "selection.h"
 #include "orderdef.h"
+#include "difficulty.h"
 #include "lib/framework/fixedpoint.h"
 
 #define	MAP_ZOOM_RATE_MAX	(1000)
@@ -46,6 +47,7 @@ void kf_ToggleSamples();		// Displays # of sound samples in Queue/list.
 void kf_ToggleOrders();		//displays unit's Order/action state.
 void kf_FrameRate();
 void kf_ShowNumObjects();
+void kf_ListDroids();
 void kf_ToggleRadar();
 void kf_TogglePower();
 void kf_RecalcLighting();
@@ -102,7 +104,9 @@ void kf_ChooseCancel();
 void kf_ToggleWeather();
 void kf_KillSelected();
 void kf_SendGlobalMessage();
+void kf_SendGlobalQuickChat();
 void kf_SendTeamMessage();
+void kf_SendTeamQuickChat();
 void kf_ToggleConsole();
 void kf_ToggleTeamChat();
 MappableFunction kf_SelectUnits(const SELECTIONTYPE selectionType, const SELECTION_CLASS selectionClass = SELECTION_CLASS::DS_BY_TYPE, const bool bOnScreen = false);
@@ -135,8 +139,7 @@ void kf_ToggleConsoleDrop();
 void kf_ToggleShakeStatus();
 void kf_ToggleMouseInvert();
 void kf_BifferBaker();
-void kf_SetEasyLevel();
-void kf_SetNormalLevel();
+void kf_SetDifficultyLevel(const DIFFICULTY_LEVEL level);
 void kf_DoubleUp();
 void kf_UpThePower();
 void kf_MaxPower();
@@ -144,7 +147,6 @@ void kf_KillEnemy();
 void kf_ToggleMissionTimer();
 void kf_TraceObject();
 
-void kf_SetHardLevel();
 MappableFunction kf_SelectCommander_N(const unsigned int n);
 
 void kf_ToggleShowGateways();
@@ -201,4 +203,7 @@ void kf_ToggleSpecOverlays();
 void enableGodMode();
 
 void keybindShutdown();
+
+void keybindInformResourceExtractorRemoved(const STRUCTURE* psResourceExtractor);
+
 #endif // __INCLUDED_SRC_KEYBIND_H__

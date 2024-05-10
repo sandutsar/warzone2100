@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cinttypes>
 #include <limits>
+#include <cassert>
 
 #define MAX_PLAYERS         11                 ///< Maximum number of players in the game.
 
@@ -193,7 +194,7 @@ static inline JSCFunctionListEntry QJS_CFUNC_DEF(const char *name, uint8_t lengt
 
 struct ScriptMapData
 {
-	std::unique_ptr<WzMap::Map> map = std::unique_ptr<WzMap::Map>(new WzMap::Map());
+	std::shared_ptr<WzMap::Map> map = std::make_shared<WzMap::Map>();
 	std::mt19937 mt;
 	WzMap::LoggingProtocol* pCustomLogger = nullptr;
 };
@@ -695,7 +696,7 @@ static void QJSRuntimeFree_LeakHandler_Warning(const char* msg)
 	debug(pRuntimeFree_CustomLogger, LOG_WARNING, "QuickJS FreeRuntime leak: %s", msg);
 }
 
-std::unique_ptr<Map> runMapScript(const std::vector<char>& fileBuffer, const std::string &path, uint32_t seed, bool preview, LoggingProtocol* pCustomLogger /*= nullptr*/)
+std::shared_ptr<Map> runMapScript(const std::vector<char>& fileBuffer, const std::string &path, uint32_t seed, bool preview, LoggingProtocol* pCustomLogger /*= nullptr*/)
 {
 	ScriptMapData data;
 	data.mt = std::mt19937(seed);
@@ -712,10 +713,10 @@ std::unique_ptr<Map> runMapScript(const std::vector<char>& fileBuffer, const std
 		JS_FreeRuntime2(rt, QJSRuntimeFree_LeakHandler_Warning);
 		pRuntimeFree_CustomLogger = nullptr;
 	});
-	JSLimitedContextOptions ctxOptions;
+	JSLimitedContextOptions ctxOptions = { };
 	ctxOptions.baseObjects = true;
 	ctxOptions.dateObject = false;
-	ctxOptions.eval = true; // required for JS_Eval to work
+	ctxOptions.eval = false;
 	ctxOptions.stringNormalize = false;
 	ctxOptions.regExp = false;
 	ctxOptions.json = false;
@@ -723,6 +724,7 @@ std::unique_ptr<Map> runMapScript(const std::vector<char>& fileBuffer, const std
 	ctxOptions.mapSet = true;
 	ctxOptions.typedArrays = false;
 	ctxOptions.promise = false;
+	ctxOptions.bigInt = false;
 	JSContext *ctx = JS_NewLimitedContext(rt, &ctxOptions);
 	if (ctx == nullptr)
 	{
@@ -745,7 +747,7 @@ std::unique_ptr<Map> runMapScript(const std::vector<char>& fileBuffer, const std
 		return nullptr;
 	}
 	size_t fileBufLen = fileBuffer.size() - 1;
-	JSValue compiledScriptObj = JS_Eval(ctx, fileBuffer.data(), fileBufLen, path.c_str(), JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_COMPILE_ONLY);
+	JSValue compiledScriptObj = JS_Eval_BypassLimitedContext(ctx, fileBuffer.data(), fileBufLen, path.c_str(), JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_COMPILE_ONLY);
 	if (JS_IsException(compiledScriptObj))
 	{
 		// compilation error / syntax error

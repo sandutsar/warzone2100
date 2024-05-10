@@ -262,7 +262,6 @@ data/*config*/*
 data/config/*
 data/etc/*
 data/std*.txt
-data/fonts/
 devpkg/*
 [Dd]ebug/
 *.opensdf
@@ -272,7 +271,6 @@ devpkg/*
 *.tlog
 *.lastbuildstate
 *.cache*
-*manifest.*
 *.exp
 warzone*.*build
 *.lnk
@@ -309,3 +307,19 @@ win32/CodeAnalyst
 !.ci/vcpkg/overlay-ports/*/*.patch
 # Do not ignore patches in quickjs patches folder
 !3rdparty/quickjs/patches/*.patch
+# Do not ignore patches in sentry folder
+!lib/exceptionhandler/3rdparty/sentry/**/*.patch
+
+# JetBrains IDEs like CLion
+/.idea/
+/cmake-build-*/
+/out/
+
+# flatpak
+/.flatpak-builder/
+/_flatpak_build/
+/flatpak_app/
+/.ci/flatpak/flatpak-github-action-modified-*
+/.ci/flatpak/net.wz2100.wz2100.yaml
+/.ci/flatpak/Toolchain-cross-arch.cmake
+/.ci/flatpak/meson-cross-file.txt

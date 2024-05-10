@@ -1,9 +1,9 @@
 debugMsg('Module: names.js','init');
 
 //Цвета
-const colors = new Array("Green","Orange","Grey","Black","Red","Blue","Pink","Cyan","Yellow","Purple","White","Bright blue","Neon green","Infrared","Ultraviolet","Brown");
+const colors = ["Green","Orange","Grey","Black","Red","Blue","Pink","Cyan","Yellow","Purple","White","Bright blue","Neon green","Infrared","Ultraviolet","Brown"];
 
-const droidTypes = new Array(
+const droidTypes = [
 	"DROID_WEAPON",  ///< Weapon droid
 	"DROID_SENSOR",           ///< Sensor droid
 	"DROID_ECM",              ///< ECM droid
@@ -19,9 +19,9 @@ const droidTypes = new Array(
 	"DROID_CYBORG_SUPER",     ///< cyborg repair droid - new for update 7/6/99
 	"DROID_SUPERTRANSPORTER", ///< SuperTransport (MP)
 	"DROID_ANY"               ///< Any droid. Used as a parameter for various stuff.
-);
+];
 
-var droidOrders = new Array(
+var droidOrders = [
 	"DORDER_NONE",   /**< no order set. */
 
 	"DORDER_STOP",            /**< stop the current order. */
@@ -59,7 +59,7 @@ var droidOrders = new Array(
 	"DORDER_RECOVER",         /**< pick up an artifact. */
 	"DORDER_LEAVEMAP",        /**< 34 - vtol flying off the map. */
 	"DORDER_RTR_SPECIFIED"    /**< return to repair at a specified repair center. */
-);
+];
 droidOrders[40] = "DORDER_CIRCLE";   /**< circles target location and engage. */
 droidOrders[41] = "DORDER_HOLD";     /**< hold position until given next order. */
 
@@ -135,6 +135,7 @@ const research_name = {
 	"R-Defense-HvyArtMissile" : "Archangel Missile Battery",
 	"R-Defense-MortarPit" : "Mortar Pit",
 	"R-Defense-MRL" : "Mini-Rocket Battery",
+	"R-Defense-MRLHvy" : "Heavy Rocket Battery",
 	"R-Defense-Pillbox01" : "Machinegun Bunker",
 	"R-Defense-Pillbox03" : "Heavy Machinegun Bunker",
 	"R-Defense-Pillbox04" : "Light Cannon Bunker",
@@ -478,6 +479,7 @@ const research_name = {
 	"R-Wpn-Rocket-ROF06" : "Rapid Fire Mini-Rockets Mk3",
 	"R-Wpn-Rocket01-LtAT" : "Lancer AT Rocket",
 	"R-Wpn-Rocket02-MRL" : "Mini-Rocket Array",
+	"R-Wpn-Rocket02-MRLHvy" : "Heavy Rocket Array",
 	"R-Wpn-Rocket03-HvAT" : "Bunker Buster Rocket",
 	"R-Wpn-Rocket05-MiniPod" : "Mini-Rocket Pod",
 	"R-Wpn-Rocket06-IDF" : "Ripple Rockets",
@@ -559,4 +561,4 @@ const research_name = {
 	"R-Comp-CommandTurret02" : "Command Turret II",
 	"R-Comp-CommandTurret03" : "Command Turret III",
 	"R-Comp-CommandTurret04" : "Command Turret IV"
-}
+};

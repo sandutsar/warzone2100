@@ -28,7 +28,7 @@
 #include <vector>
 #include <string>
 
-#include <optional-lite/optional.hpp>
+#include <nonstd/optional.hpp>
 using nonstd::optional;
 using nonstd::nullopt;
 
@@ -148,6 +148,9 @@ public:
 	// loaded mods changed
 	virtual void loadedModsChanged(const std::vector<Sha256>& loadedModHashes) { }
 
+	// game exit
+	virtual void gameExiting() { }
+
 public:
 	// Helper Functions
 	static std::string getTeamDescription(const ActivitySink::SkirmishGameInfo& info);
@@ -222,6 +225,7 @@ public:
 	inline std::shared_ptr<ActivityDBProtocol> getRecord() { return activityDatabase; }
 private:
 	ActivityManager();
+	void _initializeDB();
 	void _endedMission(ActivitySink::GameEndReason result, END_GAME_STATS_DATA stats, bool cheatsUsed);
 private:
 	std::vector<std::shared_ptr<ActivitySink>> activitySinks;

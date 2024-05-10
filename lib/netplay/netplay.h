@@ -1,7 +1,7 @@
 /*
 	This file is part of Warzone 2100.
 	Copyright (C) 1999-2004  Eidos Interactive
-	Copyright (C) 2005-2020  Warzone 2100 Project
+	Copyright (C) 2005-2024  Warzone 2100 Project
 
 	Warzone 2100 is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -29,10 +29,15 @@
 #include "lib/framework/crc.h"
 #include "src/factionid.h"
 #include "nettypes.h"
+#include "wzfile.h"
+#include "netlog.h"
+#include "sync_debug.h"
+
 #include <physfs.h>
 #include <vector>
 #include <functional>
 #include <memory>
+
 // Lobby Connection errors
 
 enum LOBBY_ERROR_TYPES
@@ -101,6 +106,10 @@ enum MESSAGE_TYPES
 	NET_PLAYER_SWAP_INDEX,			///< a host-only message to move a player to another index
 	NET_PLAYER_SWAP_INDEX_ACK,		///< an acknowledgement message from a player whose index is being swapped
 	NET_DATA_CHECK2,				///< Data2 integrity check
+	NET_SECURED_NET_MESSAGE,		///< A secured (+ authenticated) net message between two players
+	NET_TEAM_STRATEGY,				///< Player is sending an updated strategy notice to team members
+	NET_QUICK_CHAT_MSG,				///< Quick chat message
+	NET_HOST_CONFIG,				///< Host configuration sent both before the game has started (in lobby), and after the game has started
 	NET_MAX_TYPE,                   ///< Maximum+1 valid NET_ type, *MUST* be last.
 
 	// Game-state-related messages, must be processed by all clients at the same game time.
@@ -213,42 +222,9 @@ struct SYNC_COUNTER
 	uint16_t	rejected;
 };
 
-void physfs_file_safe_close(PHYSFS_file* f);
-
-struct WZFile
-{
-public:
-//	WZFile() : handle_(nullptr, physfs_file_safe_close), size(0), pos(0) { hash.setZero(); }
-	WZFile(PHYSFS_file *handle, const std::string &filename, Sha256 hash, uint32_t size = 0) : handle_(handle, physfs_file_safe_close), filename(filename), hash(hash), size(size), pos(0) {}
-
-	~WZFile();
-
-	// Prevent copies
-	WZFile(const WZFile&) = delete;
-	void operator=(const WZFile&) = delete;
-
-	// Allow move semantics
-	WZFile(WZFile&& other) = default;
-	WZFile& operator=(WZFile&& other) = default;
-
-public:
-	bool closeFile();
-	inline PHYSFS_file* handle() const
-	{
-		return handle_.get();
-	}
-
-private:
-	std::unique_ptr<PHYSFS_file, void(*)(PHYSFS_file*)> handle_;
-public:
-	std::string filename;
-	Sha256 hash;
-	uint32_t size = 0;
-	uint32_t pos = 0;  // Current position, the range [0; currPos[ has been sent or received already.
-};
-
 enum class AIDifficulty : int8_t
 {
+	SUPEREASY,
 	EASY,
 	MEDIUM,
 	HARD,
@@ -272,7 +248,7 @@ enum class NET_LOBBY_OPT_FIELD
 // currently controlled player.
 struct PLAYER
 {
-	char                name[StringSize];   ///< Player name
+	char                name[StringSize] = {};   ///< Player name
 	int32_t             position;           ///< Map starting position
 	int32_t             colour;             ///< Which colour slot this player is using
 	bool                allocated;          ///< Allocated as a human player
@@ -338,23 +314,17 @@ struct NETPLAY
 	char MOTDbuffer[255];				// buffer for MOTD
 	char *MOTD = nullptr;
 
+	std::vector<std::unordered_map<std::string, std::string>> scriptSetPlayerDataStrings;
 	std::vector<std::shared_ptr<PlayerReference>> playerReferences;
 
 	NETPLAY();
 };
 
-struct PLAYER_IP
-{
-	char	pname[40];
-	char	IPAddress[40];
-};
-#define MAX_BANS 255
 // ////////////////////////////////////////////////////////////////////////
 // variables
 
 extern NETPLAY NetPlay;
 extern SYNC_COUNTER sync_counter;
-extern PLAYER_IP	*IPlist;
 // update flags
 extern bool netPlayersUpdated;
 extern char iptoconnect[PATH_MAX]; // holds IP/hostname from command line
@@ -373,6 +343,7 @@ extern bool netGameserverPortOverride; // = false; (for cli override)
 // functions available to you.
 int NETinit(bool bFirstCall);
 WZ_DECL_NONNULL(2) bool NETsend(NETQUEUE queue, NetMessage const *message);   ///< send to player, or broadcast if player == NET_ALL_PLAYERS.
+void NETsendProcessDelayedActions();
 WZ_DECL_NONNULL(1, 2) bool NETrecvNet(NETQUEUE *queue, uint8_t *type);        ///< recv a message from the net queues if possible.
 WZ_DECL_NONNULL(1, 2) bool NETrecvGame(NETQUEUE *queue, uint8_t *type);       ///< recv a message from the game queues which is sceduled to execute by time, if possible.
 void NETflush();                                                              ///< Flushes any data stuck in compression buffers.
@@ -392,6 +363,8 @@ enum NetStatisticType {NetStatisticRawBytes, NetStatisticUncompressedBytes, NetS
 size_t NETgetStatistic(NetStatisticType type, bool sent, bool isTotal = false);     // Return some statistic. Call regularly for good results.
 
 void NETplayerKicked(UDWORD index);			// Cleanup after player has been kicked
+
+bool NETplayerHasConnection(uint32_t index);
 
 bool NETcanOpenNewSpectatorSlot();
 bool NETopenNewSpectatorSlot();
@@ -454,13 +427,11 @@ bool NEThaltJoining();				// stop new players joining this game
 bool NETenumerateGames(const std::function<bool (const GAMESTRUCT& game)>& handleEnumerateGameFunc);
 bool NETfindGames(std::vector<GAMESTRUCT>& results, size_t startingIndex, size_t resultsLimit, bool onlyMatchingLocalVersion = false);
 bool NETfindGame(uint32_t gameId, GAMESTRUCT& output);
-bool NETjoinGame(const char *host, uint32_t port, const char *playername, bool asSpectator = false); // join game given with playername
+bool NETjoinGame(const char *host, uint32_t port, const char *playername, const EcKey& playerIdentity, bool asSpectator = false); // join game given with playername
 bool NEThostGame(const char *SessionName, const char *PlayerName, bool spectatorHost, // host a game
                  uint32_t gameType, uint32_t two, uint32_t three, uint32_t four, UDWORD plyrs);
 bool NETchangePlayerName(UDWORD player, char *newName);// change a players name.
 void NETfixDuplicatePlayerNames();  // Change a player's name automatically, if there are duplicates.
-
-#include "netlog.h"
 
 void NETsetMasterserverName(const char *hostname);
 const char *NETgetMasterserverName();
@@ -470,8 +441,9 @@ void NETsetGameserverPort(unsigned int port);
 unsigned int NETgetGameserverPort();
 void NETsetJoinPreferenceIPv6(bool bTryIPv6First);
 bool NETgetJoinPreferenceIPv6();
+void NETsetDefaultMPHostFreeChatPreference(bool enabled);
+bool NETgetDefaultMPHostFreeChatPreference();
 
-bool NETsetupTCPIP(const char *machine);
 void NETsetGamePassword(const char *password);
 void NETBroadcastPlayerInfo(uint32_t index);
 void NETBroadcastTwoPlayerInfo(uint32_t index1, uint32_t index2);
@@ -489,35 +461,22 @@ const std::vector<WZFile>& NET_getDownloadingWzFiles();
 void NET_addDownloadingWZFile(WZFile&& newFile);
 void NET_clearDownloadingWZFiles();
 
+bool NET_getLobbyDisabled();
+const std::string& NET_getLobbyDisabledInfoLinkURL();
+void NET_setLobbyDisabled(const std::string& infoLinkURL);
+
 bool NETGameIsLocked();
 void NETGameLocked(bool flag);
 void NETresetGamePassword();
 bool NETregisterServer(int state);
-bool NETprocessQueuedServerUpdates();
 void NETsetPlayerConnectionStatus(CONNECTION_STATUS status, unsigned player);    ///< Cumulative, except that CONNECTIONSTATUS_NORMAL resets.
 bool NETcheckPlayerConnectionStatus(CONNECTION_STATUS status, unsigned player);  ///< True iff connection status icon hasn't expired for this player. CONNECTIONSTATUS_NORMAL means any status, NET_ALL_PLAYERS means all players.
 
+void NETsetAsyncJoinApprovalRequired(bool enabled);
+//	NOTE: *MUST* be called from the main thread!
+bool NETsetAsyncJoinApprovalResult(const std::string& uniqueJoinID, bool approve, LOBBY_ERROR_TYPES rejectedReason = ERROR_NOERROR);
+
 const char *messageTypeToString(unsigned messageType);
-
-/// Sync debugging. Only prints anything, if different players would print different things.
-#define syncDebug(...) do { _syncDebug(__FUNCTION__, __VA_ARGS__); } while(0)
-#ifdef WZ_CC_MINGW
-void _syncDebug(const char *function, const char *str, ...) WZ_DECL_FORMAT(__MINGW_PRINTF_FORMAT, 2, 3);
-#else
-void _syncDebug(const char *function, const char *str, ...) WZ_DECL_FORMAT(printf, 2, 3);
-#endif
-
-/// Faster than syncDebug. Make sure that str is a format string that takes ints only.
-void _syncDebugIntList(const char *function, const char *str, int *ints, size_t numInts);
-#define syncDebugBacktrace() do { _syncDebugBacktrace(__FUNCTION__); } while(0)
-void _syncDebugBacktrace(const char *function);                  ///< Adds a backtrace to syncDebug, if the platform supports it. Can be a bit slow, don't call way too often, unless desperate.
-uint32_t syncDebugGetCrc();                                      ///< syncDebug() calls between uint32_t crc = syncDebugGetCrc(); and syncDebugSetCrc(crc); appear in synch debug logs, but without triggering a desynch if different.
-void syncDebugSetCrc(uint32_t crc);                              ///< syncDebug() calls between uint32_t crc = syncDebugGetCrc(); and syncDebugSetCrc(crc); appear in synch debug logs, but without triggering a desynch if different.
-
-typedef uint16_t GameCrcType;  // Truncate CRC of game state to 16 bits, to save a bit of bandwidth.
-void resetSyncDebug();                                              ///< Resets the syncDebug, so syncDebug from a previous game doesn't cause a spurious desynch dump.
-GameCrcType nextDebugSync();                                        ///< Returns a CRC corresponding to all syncDebug() calls since the last nextDebugSync() or resetSyncDebug() call.
-bool checkDebugSync(uint32_t checkGameTime, GameCrcType checkCrc);  ///< Dumps all syncDebug() calls from that gameTime, if the CRC doesn't match.
 
 /**
  * This structure provides read-only access to a player, and can be used to identify players uniquely.
@@ -532,7 +491,7 @@ struct PlayerReference
 
 	void disconnect()
 	{
-		detached = std::unique_ptr<PLAYER>(new PLAYER(NetPlay.players[index]));
+		detached = std::make_unique<PLAYER>(NetPlay.players[index]);
 		detached->wzFiles = std::make_shared<std::vector<WZFile>>();
 	}
 
@@ -544,6 +503,18 @@ struct PlayerReference
 	bool isHost() const
 	{
 		return index == NetPlay.hostPlayer;
+	}
+
+	bool isDetached() const
+	{
+		return detached != nullptr;
+	}
+
+	// Generally prefer to use the -> operator!
+	// (This is only safe if isDetached() == false !!)
+	uint32_t originalIndex() const
+	{
+		return index;
 	}
 
 private:

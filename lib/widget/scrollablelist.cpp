@@ -77,6 +77,26 @@ uint32_t ScrollableListWidget::snappedOffset()
 	return 0;
 }
 
+uint32_t ScrollableListWidget::getScrollPositionForItem(size_t itemNum)
+{
+	ASSERT_OR_RETURN(0, itemNum < listView->children().size(), "Invalid itemNum: %zu", itemNum);
+	auto& child = listView->children()[itemNum];
+	const auto childOffsets = child->getScrollSnapOffsets().value_or(std::vector<uint32_t>{0});
+	for (const auto childOffset: childOffsets)
+	{
+		const auto y = child->y() + childOffset;
+		return y;
+	}
+	return child->y();
+}
+
+int32_t ScrollableListWidget::getCurrentYPosOfItem(size_t itemNum)
+{
+	int currTopOffset = listView->getTopOffset();
+	auto itemYPos = getScrollPositionForItem(itemNum);
+	return itemYPos - currTopOffset;
+}
+
 void ScrollableListWidget::addItem(const std::shared_ptr<WIDGET> &item)
 {
 	listView->attach(item);
@@ -89,6 +109,11 @@ void ScrollableListWidget::clear()
 	layoutDirty = true;
 	updateLayout();
 	listView->setTopOffset(0);
+}
+
+size_t ScrollableListWidget::numItems() const
+{
+	return listView->children().size();
 }
 
 void ScrollableListWidget::updateLayout()
@@ -106,7 +131,7 @@ void ScrollableListWidget::updateLayout()
 
 	scrollBar->show(scrollableHeight > listViewHeight);
 
-	if (scrollBar->visible())
+	if (scrollBar->visible() || !expandWidthWhenScrollbarInvisible)
 	{
 		listView->setGeometry(padding.left, padding.top, listViewWidthWithScrollBar, listViewHeight);
 	} else {
@@ -178,7 +203,12 @@ void ScrollableListWidget::setSnapOffset(bool value)
 
 void ScrollableListWidget::setItemSpacing(uint32_t value)
 {
+	if (value == itemSpacing)
+	{
+		return;
+	}
 	itemSpacing = value;
+	layoutDirty = true;
 }
 
 void ScrollableListWidget::display(int xOffset, int yOffset)
@@ -210,6 +240,11 @@ void ScrollableListWidget::setScrollbarWidth(int newWidth)
 	updateLayout();
 }
 
+void ScrollableListWidget::setExpandWhenScrollbarInvisible(bool expandWidth)
+{
+	expandWidthWhenScrollbarInvisible = expandWidth;
+}
+
 uint16_t ScrollableListWidget::getScrollPosition() const
 {
 	return scrollBar->position();
@@ -237,4 +272,72 @@ int32_t ScrollableListWidget::idealHeight()
 {
 	updateLayout();
 	return scrollableHeight + padding.top + padding.bottom;
+}
+
+void ScrollableListWidget::scrollToItem(size_t itemNum)
+{
+	updateLayout();
+	scrollBar->setPosition(getScrollPositionForItem(itemNum));
+	listView->setTopOffset(snapOffset ? snappedOffset() : scrollBar->position());
+}
+
+void ScrollableListWidget::setListTransparentToMouse(bool hasMouseTransparency)
+{
+	listView->setTransparentToMouse(hasMouseTransparency);
+}
+
+// MARK: - ClickableScrollableList
+
+std::shared_ptr<ClickableScrollableList> ClickableScrollableList::make()
+{
+	class make_shared_enabler: public ClickableScrollableList {};
+	auto widget = std::make_shared<make_shared_enabler>();
+	widget->initialize(); // calls ScrollableListWidget::initialize
+	widget->setListTransparentToMouse(true);
+	return widget;
+}
+
+void ClickableScrollableList::setOnClickHandler(const ClickableScrollableList_OnClick_Func& _onClickFunc)
+{
+	onClickFunc = _onClickFunc;
+}
+
+void ClickableScrollableList::setOnHighlightHandler(const ClickableScrollableList_OnHighlight_Func& _onHighlightFunc)
+{
+	onHighlightFunc = _onHighlightFunc;
+}
+
+void ClickableScrollableList::clicked(W_CONTEXT *, WIDGET_KEY)
+{
+	mouseDownOnList = true;
+}
+
+void ClickableScrollableList::released(W_CONTEXT *, WIDGET_KEY)
+{
+	bool wasFullClick = mouseDownOnList;
+	mouseDownOnList = false;
+	if (wasFullClick)
+	{
+		if (onClickFunc)
+		{
+			onClickFunc(*this);
+		}
+	}
+}
+
+void ClickableScrollableList::highlight(W_CONTEXT *)
+{
+	if (onHighlightFunc)
+	{
+		onHighlightFunc(*this, true);
+	}
+}
+
+void ClickableScrollableList::highlightLost()
+{
+	mouseDownOnList = false;
+	if (onHighlightFunc)
+	{
+		onHighlightFunc(*this, false);
+	}
 }

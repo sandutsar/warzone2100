@@ -61,10 +61,14 @@ enum SEQ_TEXT_POSITIONING
  *	Global ProtoTypes
  */
 /***************************************************************************/
+
+bool seq_hasVideos();
+void seq_setOnDemandVideoURL(const WzString& videoBaseURL);
+
 //buffer render
 bool seq_RenderVideoToBuffer(const WzString &sequenceName, int seqCommand);
 
-bool seq_UpdateFullScreenVideo(int *bClear);
+bool seq_UpdateFullScreenVideo();
 
 bool seq_StopFullScreenVideo();
 //control
